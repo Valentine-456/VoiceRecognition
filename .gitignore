@@ -298,3 +298,22 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/jupyternotebooks,pycharm,python
+
+# --- Project-specific ignores ---
+
+# Audio binaries (keep large files out of Git)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.wma
+*.aif
+*.aiff
+*.aifc
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/

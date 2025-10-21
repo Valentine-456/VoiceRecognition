@@ -77,3 +77,33 @@ This writes clips to: `data/custom_dataset/audio/testRunObama/`
 Notes:
 - Keep quotes around paths with spaces.
 - Output files are saved as WAV for reliability and lossless quality.
+
+---
+
+## 📈 Generate Spectrograms From Audio Folder
+
+Use `scripts/generate_spectrograms.py` to turn all audio in a folder into spectrogram PNGs.
+
+### Example (mel spectrograms)
+
+```bash
+# Generate mel spectrograms from all files in data/full_audio_files
+python scripts/generate_spectrograms.py \
+  --input-dir data/full_audio_files \
+  --output-name obamaSpectros \
+  --sr 16000 \
+  --type mel
+```
+
+Outputs are saved to: `data/custom_dataset/spectrograms/obamaSpectros/` with the same base names
+as the inputs (e.g., `ObamaSpeech.mp3` -> `ObamaSpeech.png`).
+
+### Arguments
+- `--input-dir`: Folder containing audio files (`.wav`, `.mp3`, `.flac`, `.ogg`, `.m4a`, ...).
+- `--output-name`: Subfolder created under `data/custom_dataset/spectrograms/`.
+- `--sr`: Target sample rate for loading (default `16000`).
+- `--type`: `mel` (default) or `linear` magnitude spectrograms.
+- `--recursive`: Search subfolders recursively.
+- `--mono`/`--stereo`: Convert to mono (default) or keep stereo.
+
+Note: Spectrograms are saved as PNGs to avoid codec issues and are suitable for ML pipelines.
