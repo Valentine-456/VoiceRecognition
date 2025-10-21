@@ -45,3 +45,35 @@ pip install -r requirements.txt
 ```bash
 python scripts/preprocess_dataset.py
 ```
+
+---
+
+## 🎙️ Clip Audio Into Fixed-Length Segments
+
+Use `scripts/clip_audio.py` to split any audio file into N‑second clips and save them under `data/custom_dataset/audio/<name>/`.
+
+### Example (10‑second clips)
+
+```bash
+# Split an MP3 into 10-second clips named under testRunObama/
+python scripts/clip_audio.py \
+  --input "data/full_audio_files/ObamaSpeech.mp3" \
+  --seconds 10 \
+  --name testRunObama \
+  --keep-remainder \
+  --target-sr 16000
+```
+
+This writes clips to: `data/custom_dataset/audio/testRunObama/`
+
+### Arguments
+
+- `--input`: Path to the source audio (MP3/WAV supported by torchaudio).
+- `--seconds`: Clip length in seconds (e.g., `3`, `10`).
+- `--name`: Subfolder name under `data/custom_dataset/audio/` to save clips.
+- `--keep-remainder`: Also saves the final shorter clip if the audio length is not a multiple of `--seconds`.
+- `--target-sr`: Optional resample target (e.g., `16000`) to standardize sample rate (recommended for speech).
+
+Notes:
+- Keep quotes around paths with spaces.
+- Output files are saved as WAV for reliability and lossless quality.
