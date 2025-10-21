@@ -82,17 +82,32 @@ Notes:
 
 ## 📈 Generate Spectrograms From Audio Folder
 
-Use `scripts/generate_spectrograms.py` to turn all audio in a folder into spectrogram PNGs.
+Use `scripts/generate_spectrograms.py` to turn all audio in a folder into spectrograms.
 
 ### Example (mel spectrograms)
 
 ```bash
-# Generate mel spectrograms from all files in data/full_audio_files
+# Generate mel spectrograms (as PNG images) from all files in data/full_audio_files
 python scripts/generate_spectrograms.py \
   --input-dir data/full_audio_files \
   --output-name obamaSpectros \
   --sr 16000 \
-  --type mel
+  --type mel \
+  --format png
+
+# Save as PyTorch tensors (.pt) instead of PNGs
+python scripts/generate_spectrograms.py \
+  --input-dir data/full_audio_files \
+  --output-name obamaSpectros_pt \
+  --sr 16000 \
+  --type mel \
+  --format pt
+
+# Save both PNG and .pt for each file
+python scripts/generate_spectrograms.py \
+  --input-dir data/full_audio_files \
+  --output-name obamaSpectros_both \
+  --format both
 ```
 
 Outputs are saved to: `data/custom_dataset/spectrograms/obamaSpectros/` with the same base names
@@ -103,7 +118,9 @@ as the inputs (e.g., `ObamaSpeech.mp3` -> `ObamaSpeech.png`).
 - `--output-name`: Subfolder created under `data/custom_dataset/spectrograms/`.
 - `--sr`: Target sample rate for loading (default `16000`).
 - `--type`: `mel` (default) or `linear` magnitude spectrograms.
+- `--format`: `png` (default), `pt` (PyTorch tensor), or `both`.
 - `--recursive`: Search subfolders recursively.
 - `--mono`/`--stereo`: Convert to mono (default) or keep stereo.
 
-Note: Spectrograms are saved as PNGs to avoid codec issues and are suitable for ML pipelines.
+Notes:
+- PNGs are easy to view; `.pt` files are efficient to load in PyTorch.
