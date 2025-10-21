@@ -32,6 +32,7 @@ import matplotlib
 # Use a non-interactive backend for safe file saving
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import torch
 
 try:
     from tqdm import tqdm
@@ -68,6 +69,12 @@ def parse_args() -> argparse.Namespace:
     mono_group.add_argument("--stereo", dest="mono", action="store_false", help="Keep stereo if present")
     p.set_defaults(mono=True)
     p.add_argument(
+        "--format",
+        choices=["png", "pt", "both"],
+        default="png",
+        help="Output format for spectrograms: 'png' image, 'pt' PyTorch tensor, or 'both' (default: png)",
+    )
+    p.add_argument(
         "--recursive",
         action="store_true",
         help="If set, search input directory recursively for audio files",
@@ -103,6 +110,18 @@ def save_spectrogram_png(spec_db: np.ndarray, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, bbox_inches="tight", pad_inches=0)
     plt.close()
+
+
+def save_spectrogram_pt(spec_db: np.ndarray, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Prefer zero‑copy path, but fall back if PyTorch's NumPy bridge is unavailable
+    arr32 = np.asarray(spec_db, dtype=np.float32)
+    try:
+        tensor = torch.from_numpy(arr32)
+    except Exception:
+        # Fallback that avoids NumPy bridge (slower, but robust)
+        tensor = torch.tensor(arr32.tolist(), dtype=torch.float32)
+    torch.save(tensor, out_path)
 
 
 def compute_spectrogram(y: np.ndarray, sr: int, kind: str, n_fft: int, hop_length: int, n_mels: int) -> np.ndarray:
@@ -149,12 +168,25 @@ def main() -> int:
             print(f"[WARN] Failed to compute spectrogram for {ap}: {e}", file=sys.stderr)
             continue
 
-        out_path = out_base / (ap.stem + ".png")
-        try:
-            save_spectrogram_png(spec_db, out_path)
+        ok_for_this = True
+        if args.format in ("png", "both"):
+            png_path = out_base / (ap.stem + ".png")
+            try:
+                save_spectrogram_png(spec_db, png_path)
+            except Exception as e:
+                ok_for_this = False
+                print(f"[WARN] Failed to save PNG {png_path}: {e}", file=sys.stderr)
+
+        if args.format in ("pt", "both"):
+            pt_path = out_base / (ap.stem + ".pt")
+            try:
+                save_spectrogram_pt(spec_db, pt_path)
+            except Exception as e:
+                ok_for_this = False
+                print(f"[WARN] Failed to save PT {pt_path}: {e}", file=sys.stderr)
+
+        if ok_for_this:
             converted += 1
-        except Exception as e:
-            print(f"[WARN] Failed to save spectrogram {out_path}: {e}", file=sys.stderr)
 
     print(f"[OK] Converted {converted}/{len(audio_files)} files to spectrograms.")
     return 0
