@@ -1,5 +1,8 @@
 # Voice Recognition 
 ---
+### Other Script Docs
+- For audio clipping usage, see: `scripts/clip_audio_README.md`
+- For spectrogram generation usage, see: `scripts/generate_spectrograms_README.md`
 The goal of the project is to prepare a machine learning module that can be hypothetically used in an automated, voice-based intercom device. Imagine that you are working in a team of several programmers and the access to your floor is restricted with doors. There is an intercom that can be used to open the door. You are implementing a machine learning module that will recognize if a given person has the permission to open the door or not.
 
 ---
@@ -48,79 +51,110 @@ python scripts/preprocess_dataset.py
 
 ---
 
-## 🎙️ Clip Audio Into Fixed-Length Segments
+## 🧪 Full Pipeline: Clip → Spectrograms
 
-Use `scripts/clip_audio.py` to split any audio file into N‑second clips and save them under `data/custom_dataset/audio/<name>/`.
+Use `scripts/preprocess_dataset.py` to run both steps in sequence.
 
-### Example (10‑second clips)
-
+Example:
 ```bash
-# Split an MP3 into 10-second clips named under testRunObama/
-python scripts/clip_audio.py \
-  --input "data/full_audio_files/ObamaSpeech.mp3" \
-  --seconds 10 \
-  --name testRunObama \
-  --keep-remainder \
-  --target-sr 16000
+python scripts/preprocess_dataset.py \
+  --input data/full_audio_files \
+  --seconds 3 \
+  --clips-name clips \
+  -r \
+  --silence-top-db 40 \
+  --spec-output-name clips_specs \
+  --spec-format png \
+  --spec-type mel \
+  --spec-sr 16000 \
+  --spec-time-pool 2 --spec-freq-pool 2 --spec-pool-mode avg \
+  --spec-grayscale --spec-image-scale 0.5
 ```
 
-This writes clips to: `data/custom_dataset/audio/testRunObama/`
+Outputs:
+- Clips: `data/custom_dataset/audio/clips/`
+- Spectrograms: `data/custom_dataset/spectrograms/clips_specs/`
 
-### Arguments
+### Preset Pipeline Examples
 
-- `--input`: Path to the source audio (MP3/WAV supported by torchaudio).
-- `--seconds`: Clip length in seconds (e.g., `3`, `10`).
-- `--name`: Subfolder name under `data/custom_dataset/audio/` to save clips.
-- `--keep-remainder`: Also saves the final shorter clip if the audio length is not a multiple of `--seconds`.
-- `--target-sr`: Optional resample target (e.g., `16000`) to standardize sample rate (recommended for speech).
+- Regular (baseline)
+```bash
+python scripts/preprocess_dataset.py \
+  --input data/full_audio_files \
+  --seconds 10 \
+  --clips-name clips_regular \
+  -r \
+  --spec-output-name specs_regular \
+  --spec-format png \
+  --spec-type mel \
+  --spec-sr 16000
+```
 
-Notes:
-- Keep quotes around paths with spaces.
-- Output files are saved as WAV for reliability and lossless quality.
+- Low Res (moderate simplification)
+```bash
+python scripts/preprocess_dataset.py \
+  --input data/full_audio_files \
+  --seconds 10 \
+  --clips-name clips_lowres \
+  -r \
+  --spec-output-name specs_lowres \
+  --spec-format png \
+  --spec-type mel \
+  --spec-sr 16000 \
+  --spec-time-pool 2 --spec-freq-pool 2 --spec-pool-mode avg
+```
+
+- Lower Res (stronger simplification)
+```bash
+python scripts/preprocess_dataset.py \
+  --input data/full_audio_files \
+  --seconds 10 \
+  --clips-name clips_lowerres \
+  -r \
+  --spec-output-name specs_lowerres \
+  --spec-format png \
+  --spec-type mel \
+  --spec-sr 8000 \
+  --spec-time-pool 3 --spec-freq-pool 3 --spec-pool-mode avg
+```
+
+What these options do (plain English):
+-- `--spec-sr`: How many sound snapshots per second (like video FPS). Lower (e.g., 8000) = less detail, smaller data.
+-- `--spec-time-pool`: Shrinks the picture left–right by merging neighboring time slices. Bigger number = more shrink.
+-- `--spec-freq-pool`: Shrinks the picture up–down by merging neighboring pitch bands. Bigger number = more shrink.
+-- `--spec-pool-mode avg`: Uses average when merging (smoother). `max` keeps only the strongest part (sharper).
+
+### Pipeline Flags Reference (values and effects)
+
+- Input and traversal
+  - `--input` (path): File or directory to process.
+  - `-r`, `--recursive` (flag): When input is a directory, include all subfolders.
+
+- Clipping step (scripts/clip_audio.py)
+  - `--seconds` (float, > 0): Length of each clip in seconds. Example: 3, 5, 10.
+  - `--clips-name` (str): Output folder name under `data/custom_dataset/audio/`.
+  - `--clip-prefix` (str, optional): Prefix for saved clip filenames.
+  - `--keep-remainder` (flag): Also save the final short clip if leftover audio exists.
+  - `--clip-target-sr` (int): Resample audio before clipping. Common values: 16000 (default choice), 8000.
+  - `--silence-top-db` (float): Silence removal aggressiveness; higher removes more. Typical 20–60; default 30.
+
+- Spectrogram step (scripts/generate_spectrograms.py)
+  - `--spec-output-name` (str): Folder name under `data/custom_dataset/spectrograms/`.
+  - `--spec-format` (png | pt | both): How to save spectrograms. Use `pt` for CNN training; `png` for viewing.
+  - `--spec-type` (mel | linear): Mel is default for speech; linear is raw magnitude.
+  - `--spec-sr` (int): Sample rate used when loading clips for spectrograms. Common: 16000 (default), 8000 (more compact).
+  - `--spec-time-pool` (int ≥ 1): Downsample along time; 1=no downsample, 2=halve, 3=third.
+  - `--spec-freq-pool` (int ≥ 1): Downsample along frequency; 1=no downsample, 2=halve, 3=third.
+  - `--spec-pool-mode` (avg | max): How pooled blocks are merged; avg = smoother, max = sharper.
+  - `--spec-grayscale` (flag): Save PNGs as grayscale. Has no effect if `--spec-format pt`.
+  - `--spec-image-scale` (float > 0): Scale saved PNG size (e.g., 0.5 halves width/height). Has no effect for `.pt`.
+  - `--spec-cmap` (str): Matplotlib colormap for PNGs when not grayscale (e.g., magma, viridis). No effect for `.pt`.
 
 ---
 
-## 📈 Generate Spectrograms From Audio Folder
-
-Use `scripts/generate_spectrograms.py` to turn all audio in a folder into spectrograms.
-
-### Example (mel spectrograms)
-
-```bash
-# Generate mel spectrograms (as PNG images) from all files in data/full_audio_files
-python scripts/generate_spectrograms.py \
-  --input-dir data/full_audio_files \
-  --output-name obamaSpectros \
-  --sr 16000 \
-  --type mel \
-  --format png
-
-# Save as PyTorch tensors (.pt) instead of PNGs
-python scripts/generate_spectrograms.py \
-  --input-dir data/full_audio_files \
-  --output-name obamaSpectros_pt \
-  --sr 16000 \
-  --type mel \
-  --format pt
-
-# Save both PNG and .pt for each file
-python scripts/generate_spectrograms.py \
-  --input-dir data/full_audio_files \
-  --output-name obamaSpectros_both \
-  --format both
-```
-
-Outputs are saved to: `data/custom_dataset/spectrograms/obamaSpectros/` with the same base names
-as the inputs (e.g., `ObamaSpeech.mp3` -> `ObamaSpeech.png`).
-
-### Arguments
-- `--input-dir`: Folder containing audio files (`.wav`, `.mp3`, `.flac`, `.ogg`, `.m4a`, ...).
-- `--output-name`: Subfolder created under `data/custom_dataset/spectrograms/`.
-- `--sr`: Target sample rate for loading (default `16000`).
-- `--type`: `mel` (default) or `linear` magnitude spectrograms.
-- `--format`: `png` (default), `pt` (PyTorch tensor), or `both`.
-- `--recursive`: Search subfolders recursively.
-- `--mono`/`--stereo`: Convert to mono (default) or keep stereo.
-
-Notes:
-- PNGs are easy to view; `.pt` files are efficient to load in PyTorch.
+### Tips to Reduce “Quality” for CNNs
+- Lower spectral resolution: reduce `--n-mels` (e.g., 64 or 40) or use `--freq-pool 2`.
+- Lower temporal resolution: increase `--hop-length` (e.g., 320) or use `--time-pool 2`.
+- Grayscale images: add `--grayscale` to save 1‑channel images.
+- Smaller image size: set `--image-scale 0.5` to save fewer pixels.
+- Lower audio SR: try `--sr 8000` for speech to reduce high‑frequency detail.

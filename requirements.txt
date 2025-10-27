@@ -1,4 +1,5 @@
-numpy
+# Pin NumPy to 1.x to avoid binary mismatches with torch/torchaudio wheels
+numpy<2
 pandas
 torch
 torchaudio
