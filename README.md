@@ -1,8 +1,9 @@
 # Voice Recognition 
 ---
 ### Other Script Docs
-- For audio clipping usage, see: `scripts/clip_audio_README.md`
-- For spectrogram generation usage, see: `scripts/generate_spectrograms_README.md`
+- Audio clipping: `scripts/clip_audio_README.md`
+- Spectrogram generation: `scripts/generate_spectrograms_README.md`
+- Make stratified splits: `scripts/make_splits_README.md`
 The goal of the project is to prepare a machine learning module that can be hypothetically used in an automated, voice-based intercom device. Imagine that you are working in a team of several programmers and the access to your floor is restricted with doors. There is an intercom that can be used to open the door. You are implementing a machine learning module that will recognize if a given person has the permission to open the door or not.
 
 ---
@@ -117,14 +118,7 @@ python scripts/preprocess_dataset.py \
   --spec-sr 8000 \
   --spec-time-pool 3 --spec-freq-pool 3 --spec-pool-mode avg
 ```
-
-What these options do (plain English):
--- `--spec-sr`: How many sound snapshots per second (like video FPS). Lower (e.g., 8000) = less detail, smaller data.
--- `--spec-time-pool`: Shrinks the picture left–right by merging neighboring time slices. Bigger number = more shrink.
--- `--spec-freq-pool`: Shrinks the picture up–down by merging neighboring pitch bands. Bigger number = more shrink.
--- `--spec-pool-mode avg`: Uses average when merging (smoother). `max` keeps only the strongest part (sharper).
-
-### Pipeline Flags Reference (values and effects)
+### Pipeline Flags Reference
 
 - Input and traversal
   - `--input` (path): File or directory to process.
@@ -151,10 +145,21 @@ What these options do (plain English):
   - `--spec-cmap` (str): Matplotlib colormap for PNGs when not grayscale (e.g., magma, viridis). No effect for `.pt`.
 
 ---
-
-### Tips to Reduce “Quality” for CNNs
-- Lower spectral resolution: reduce `--n-mels` (e.g., 64 or 40) or use `--freq-pool 2`.
-- Lower temporal resolution: increase `--hop-length` (e.g., 320) or use `--time-pool 2`.
-- Grayscale images: add `--grayscale` to save 1‑channel images.
-- Smaller image size: set `--image-scale 0.5` to save fewer pixels.
-- Lower audio SR: try `--sr 8000` for speech to reduce high‑frequency detail.
+### Dataset Splits
+- Recommended: Save-time split (writes directly to train/val/test while creating files).
+```bash
+python scripts/preprocess_dataset.py \
+  --input data/full_audio_files \
+  --seconds 10 \
+  --clips-name clips_run \
+  -r \
+  --spec-output-name specs_run \
+  --spec-format pt \
+  --save-split specs \
+  --save-split-name dataset_v1 \
+  --save-split-label-from prefix \
+  --save-split-sizes 80 10 10 \
+  --save-split-seed 42
+```
+- Outputs: `data/custom_dataset/splits/dataset_v1/spectrograms/{train,val,test}/` and CSVs `spectrograms_{split}.csv`.
+- Alternative: If you already have a flat folder, use the standalone splitter. See `scripts/make_splits_README.md`.
