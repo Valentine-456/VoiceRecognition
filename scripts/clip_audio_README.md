@@ -28,3 +28,27 @@ Behavior
 
 Notes
 - Supported formats depend on torchaudio (e.g., wav, mp3, flac, ogg, m4a).
+
+Split-at-save (optional)
+- Send clips directly into train/val/test under `data/custom_dataset/splits/<dataset>/audio/` and append CSVs.
+- Flags:
+  - `--split-at-save` (flag): Enable split-at-save.
+  - `--split-name` (str): Dataset folder under `data/custom_dataset/splits/` (required with `--split-at-save`).
+  - `--split-label-from` (prefix | parent): Use filename prefix (default) or parent folder for label.
+  - `--split-sizes` (three ints, default `80 10 10`): Percentages for train/val/test.
+  - `--split-seed` (int, default `42`): Seed for stable assignment.
+  - `--also-save-flat` (flag): Also save to `data/custom_dataset/audio/<name>/` in addition to splits.
+
+Example (split at save time):
+```
+python scripts/clip_audio.py \
+  --input data/full_audio_files \
+  --seconds 3 \
+  --name all_clips \
+  -r \
+  --split-at-save \
+  --split-name dataset_v1 \
+  --split-label-from prefix \
+  --split-sizes 80 10 10 \
+  --split-seed 42
+```
