@@ -64,6 +64,13 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-fft", type=int, default=1024, help="FFT window size (default: 1024)")
     p.add_argument("--hop-length", type=int, default=256, help="Hop length (default: 256)")
     p.add_argument("--n-mels", type=int, default=80, help="Number of mel bands (mel only; default: 80)")
+    # Resolution/quality controls
+    p.add_argument("--time-pool", type=int, default=1, help="Downsample factor along time axis via pooling (default: 1)")
+    p.add_argument("--freq-pool", type=int, default=1, help="Downsample factor along frequency axis via pooling (default: 1)")
+    p.add_argument("--pool-mode", choices=["avg", "max"], default="avg", help="Pooling type for downsampling (default: avg)")
+    p.add_argument("--grayscale", action="store_true", help="Save PNGs in grayscale instead of colormap")
+    p.add_argument("--cmap", default="magma", help="Matplotlib colormap for PNGs when not grayscale (default: magma)")
+    p.add_argument("--image-scale", type=float, default=1.0, help="Scale factor for saved PNG resolution (e.g., 0.5 halves width/height)")
     mono_group = p.add_mutually_exclusive_group()
     mono_group.add_argument("--mono", dest="mono", action="store_true", help="Convert to mono (default)")
     mono_group.add_argument("--stereo", dest="mono", action="store_false", help="Keep stereo if present")
@@ -96,16 +103,18 @@ def find_audio_files(root: Path, recursive: bool) -> List[Path]:
     return files
 
 
-def save_spectrogram_png(spec_db: np.ndarray, out_path: Path) -> None:
+def save_spectrogram_png(spec_db: np.ndarray, out_path: Path, *, grayscale: bool, cmap: str, image_scale: float) -> None:
     # Tight figure with no axes, suitable for ML ingestion
     h, w = spec_db.shape
     dpi = 100
-    fig_w = max(1.0, w / dpi)
-    fig_h = max(1.0, h / dpi)
+    scale = max(1e-3, float(image_scale))
+    fig_w = max(1.0, (w / dpi) * scale)
+    fig_h = max(1.0, (h / dpi) * scale)
 
     plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
     plt.axis("off")
-    plt.imshow(spec_db, origin="lower", aspect="auto", cmap="magma")
+    chosen_cmap = "gray" if grayscale else cmap
+    plt.imshow(spec_db, origin="lower", aspect="auto", cmap=chosen_cmap)
     plt.tight_layout(pad=0)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, bbox_inches="tight", pad_inches=0)
@@ -133,6 +142,32 @@ def compute_spectrogram(y: np.ndarray, sr: int, kind: str, n_fft: int, hop_lengt
         S = np.abs(librosa.stft(y=y, n_fft=n_fft, hop_length=hop_length))
         S_db = librosa.amplitude_to_db(S, ref=np.max)
         return S_db
+
+def _pool_axis(arr: np.ndarray, axis: int, k: int, mode: str) -> np.ndarray:
+    if k <= 1:
+        return arr
+    if arr.shape[axis] < k:
+        return arr
+    trim = arr.shape[axis] - (arr.shape[axis] % k)
+    if trim != arr.shape[axis]:
+        slicer = [slice(None)] * arr.ndim
+        slicer[axis] = slice(0, trim)
+        arr = arr[tuple(slicer)]
+    new_shape = list(arr.shape)
+    new_shape[axis] = new_shape[axis] // k
+    new_shape.insert(axis + 1, k)
+    arr = arr.reshape(new_shape)
+    if mode == "max":
+        pooled = arr.max(axis=axis + 1)
+    else:
+        pooled = arr.mean(axis=axis + 1)
+    return pooled
+
+def downsample_spec(spec_db: np.ndarray, time_pool: int, freq_pool: int, mode: str) -> np.ndarray:
+    # spec_db shape: (freq, time)
+    out = _pool_axis(spec_db, axis=1, k=int(time_pool), mode=mode)
+    out = _pool_axis(out, axis=0, k=int(freq_pool), mode=mode)
+    return out
 
 
 def main() -> int:
@@ -164,6 +199,9 @@ def main() -> int:
 
         try:
             spec_db = compute_spectrogram(y=y, sr=sr, kind=args.type, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels)
+            # Optional downsampling/pooling to reduce resolution
+            if args.time_pool > 1 or args.freq_pool > 1:
+                spec_db = downsample_spec(spec_db, time_pool=args.time_pool, freq_pool=args.freq_pool, mode=args.pool_mode)
         except Exception as e:
             print(f"[WARN] Failed to compute spectrogram for {ap}: {e}", file=sys.stderr)
             continue
@@ -172,7 +210,7 @@ def main() -> int:
         if args.format in ("png", "both"):
             png_path = out_base / (ap.stem + ".png")
             try:
-                save_spectrogram_png(spec_db, png_path)
+                save_spectrogram_png(spec_db, png_path, grayscale=args.grayscale, cmap=args.cmap, image_scale=args.image_scale)
             except Exception as e:
                 ok_for_this = False
                 print(f"[WARN] Failed to save PNG {png_path}: {e}", file=sys.stderr)
