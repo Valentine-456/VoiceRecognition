@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate spectrogram images for all audio files in a directory.
+Generate spectrograms for a directory of audio files.
 
 Input: a directory containing audio files (wav, mp3, flac, ogg, m4a).
-Output: spectrogram PNGs saved under data/custom_dataset/spectrograms/<output_name>/
+Output: spectrograms under `data/custom_dataset/spectrograms/<output_name>/` as PNG, PT, or both.
 
-Each output PNG is named after the corresponding audio file's stem, e.g.,
+Each output file is named after the input audio's stem, e.g.,
   input:  songA.mp3  -> output: songA.png
 
 Examples:
@@ -14,7 +14,10 @@ Examples:
     --output-name obamaSpectros \
     --sr 16000 --type mel
 
-Dependencies: librosa, matplotlib, numpy, tqdm (already listed in requirements.txt)
+Note: Splitting into train/val/test is done afterward using
+`scripts/make_splits.py` (or via the pipeline's `--do-split`).
+
+Dependencies: librosa, matplotlib, numpy, tqdm
 """
 
 from __future__ import annotations
@@ -34,16 +37,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import torch
 
-# Ensure local src/ is importable when running as a script
-try:
-    from src.split_assigner import assign_split, next_destination, append_csv
-except ModuleNotFoundError:
-    import sys as _sys
-    from pathlib import Path as _Path
-    _root = _Path(__file__).resolve().parents[1]
-    if str(_root) not in _sys.path:
-        _sys.path.insert(0, str(_root))
-    from src.split_assigner import assign_split, next_destination, append_csv
+# (No split-at-save; splitting is done post‑hoc by scripts/make_splits.py.)
 
 try:
     from tqdm import tqdm
@@ -97,13 +91,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="If set, search input directory recursively for audio files",
     )
-    # Split-at-save options (write directly into train/val/test under splits)
-    p.add_argument("--split-at-save", action="store_true", help="Save spectrograms directly into train/val/test splits")
-    p.add_argument("--split-name", default=None, help="Dataset name under data/custom_dataset/splits/ (required with --split-at-save)")
-    p.add_argument("--split-label-from", choices=["prefix", "parent"], default="prefix", help="How to derive label for splits: from filename prefix or parent folder")
-    p.add_argument("--split-sizes", nargs=3, type=int, default=[80, 10, 10], metavar=("TRAIN", "VAL", "TEST"), help="Split percentages that sum to 100")
-    p.add_argument("--split-seed", type=int, default=42, help="Seed for split assignment (stable)")
-    p.add_argument("--also-save-flat", action="store_true", help="When splitting at save, also write to the flat output folder")
     return p.parse_args()
 
 
@@ -206,11 +193,7 @@ def main() -> int:
 
     print(f"[INFO] Found {len(audio_files)} audio files in {in_dir}")
     print(f"[INFO] Writing spectrograms to {out_base}")
-    if args.split_at_save:
-        if not args.split_name:
-            print("[ERROR] --split-name is required when using --split-at-save", file=sys.stderr)
-            return 8
-        print(f"[INFO] Split-at-save: dataset={args.split_name}, sizes={tuple(args.split_sizes)}, seed={args.split_seed}")
+    # Splitting is not handled here; run scripts/make_splits.py after generation.
 
     converted = 0
     for ap in tqdm(audio_files, desc="Converting"):
@@ -232,60 +215,19 @@ def main() -> int:
         ok_for_this = True
         if args.format in ("png", "both"):
             flat_png = out_base / (ap.stem + ".png")
-            if args.split_at_save:
-                # derive label from input audio name
-                if args.split_label_from == "parent":
-                    label = ap.parent.name
-                else:
-                    label = ap.stem.split("_", 1)[0]
-                source_id = ap.stem
-                split = assign_split(label=label, source_id=source_id, seed=int(args.split_seed), splits=tuple(args.split_sizes))
-                dst = next_destination(Path("data/custom_dataset/splits"), args.split_name, "spectrograms", split, label, ".png")
-                try:
-                    save_spectrogram_png(spec_db, dst, grayscale=args.grayscale, cmap=args.cmap, image_scale=args.image_scale)
-                    append_csv(Path("data/custom_dataset/splits"), args.split_name, "spectrograms", split, dst, label, flat_png)
-                except Exception as e:
-                    ok_for_this = False
-                    print(f"[WARN] Failed to save split PNG {dst}: {e}", file=sys.stderr)
-                if args.also_save_flat:
-                    try:
-                        save_spectrogram_png(spec_db, flat_png, grayscale=args.grayscale, cmap=args.cmap, image_scale=args.image_scale)
-                    except Exception as e:
-                        print(f"[WARN] Failed to also save flat PNG {flat_png}: {e}", file=sys.stderr)
-            else:
-                try:
-                    save_spectrogram_png(spec_db, flat_png, grayscale=args.grayscale, cmap=args.cmap, image_scale=args.image_scale)
-                except Exception as e:
-                    ok_for_this = False
-                    print(f"[WARN] Failed to save PNG {flat_png}: {e}", file=sys.stderr)
+            try:
+                save_spectrogram_png(spec_db, flat_png, grayscale=args.grayscale, cmap=args.cmap, image_scale=args.image_scale)
+            except Exception as e:
+                ok_for_this = False
+                print(f"[WARN] Failed to save PNG {flat_png}: {e}", file=sys.stderr)
 
         if args.format in ("pt", "both"):
             flat_pt = out_base / (ap.stem + ".pt")
-            if args.split_at_save:
-                if args.split_label_from == "parent":
-                    label = ap.parent.name
-                else:
-                    label = ap.stem.split("_", 1)[0]
-                source_id = ap.stem
-                split = assign_split(label=label, source_id=source_id, seed=int(args.split_seed), splits=tuple(args.split_sizes))
-                dst = next_destination(Path("data/custom_dataset/splits"), args.split_name, "spectrograms", split, label, ".pt")
-                try:
-                    save_spectrogram_pt(spec_db, dst)
-                    append_csv(Path("data/custom_dataset/splits"), args.split_name, "spectrograms", split, dst, label, flat_pt)
-                except Exception as e:
-                    ok_for_this = False
-                    print(f"[WARN] Failed to save split PT {dst}: {e}", file=sys.stderr)
-                if args.also_save_flat:
-                    try:
-                        save_spectrogram_pt(spec_db, flat_pt)
-                    except Exception as e:
-                        print(f"[WARN] Failed to also save flat PT {flat_pt}: {e}", file=sys.stderr)
-            else:
-                try:
-                    save_spectrogram_pt(spec_db, flat_pt)
-                except Exception as e:
-                    ok_for_this = False
-                    print(f"[WARN] Failed to save PT {flat_pt}: {e}", file=sys.stderr)
+            try:
+                save_spectrogram_pt(spec_db, flat_pt)
+            except Exception as e:
+                ok_for_this = False
+                print(f"[WARN] Failed to save PT {flat_pt}: {e}", file=sys.stderr)
 
         if ok_for_this:
             converted += 1

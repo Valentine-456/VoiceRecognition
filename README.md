@@ -78,6 +78,20 @@ Outputs:
 
 ### Preset Pipeline Examples
 
+- Do it all single command for converting audio files to split spectrogram. To make it work, inside `/full_audio_files` add accepted audios to `accept` sub dir and rejected audios to `reject` sun dir 
+```bash
+python scripts/preprocess_dataset.py \
+ --input data/full_audio_files \
+ --seconds 3 \
+ --clips-name clips_lowerres -r \
+ --clip-prefix-from-parent \
+ --spec-output-name specs_lowQuality \
+ --spec-format png --spec-type mel --spec-sr 8000 --spec-time-pool 3 \
+ --spec-freq-pool 3 --spec-pool-mode avg \
+ --do-split --split-target specs --split-ext .png \
+ --split-output-name access_v1 --split-label-from prefix --split-sizes 80 10 10 --split-seed 30
+```
+
 - Regular (baseline)
 ```bash
 python scripts/preprocess_dataset.py \
@@ -146,20 +160,27 @@ python scripts/preprocess_dataset.py \
 
 ---
 ### Dataset Splits
-- Recommended: Save-time split (writes directly to train/val/test while creating files).
-```bash
-python scripts/preprocess_dataset.py \
-  --input data/full_audio_files \
-  --seconds 10 \
-  --clips-name clips_run \
-  -r \
-  --spec-output-name specs_run \
-  --spec-format pt \
-  --save-split specs \
-  --save-split-name dataset_v1 \
-  --save-split-label-from prefix \
-  --save-split-sizes 80 10 10 \
-  --save-split-seed 42
-```
-- Outputs: `data/custom_dataset/splits/dataset_v1/spectrograms/{train,val,test}/` and CSVs `spectrograms_{split}.csv`.
-- Alternative: If you already have a flat folder, use the standalone splitter. See `scripts/make_splits_README.md`.
+- Generating splits from existing ds.
+  ```bash
+  python scripts/make_splits.py \
+    --input-dir data/custom_dataset/spectrograms/specs_run \
+    --ext .pt \
+    --label-from prefix \
+    --splits 80 10 10 \
+    --seed 42 \
+    --output-name dataset_v1
+  ```
+  - Outputs: `data/custom_dataset/splits/dataset_v1/{train,val,test}/` and CSVs `train.csv`, `val.csv`, `test.csv`.
+
+- One-step alternative: use the pipeline’s `--do-split` to run the splitter at the end:
+  ```bash
+  python scripts/preprocess_dataset.py \
+    --input data/full_audio_files \
+    --seconds 10 \
+    --clips-name clips_run \
+    -r \
+    --spec-output-name specs_run \
+    --spec-format pt \
+    --do-split --split-target specs --split-ext .pt --split-output-name dataset_v1
+  ```
+  - See `scripts/make_splits_README.md` for splitter options.

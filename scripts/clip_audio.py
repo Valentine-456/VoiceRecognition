@@ -23,6 +23,14 @@ By default, silence is removed before splitting using a dB threshold. Use
 
 All clips are written under `data/custom_dataset/audio/<name>/`. In directory
 mode, filenames are prefixed with the source file's stem to avoid collisions.
+
+Note: Splitting into train/val/test is no longer done here. First create clips
+with this script, then run `scripts/make_splits.py` (or use the pipeline's
+`--do-split` option) to create dataset splits.
+
+Tip: If your input directory has per-class subfolders (e.g., accept/, reject/),
+use `--prefix-from-parent` to include the parent folder name in each filename
+so labels are preserved (e.g., `accept_<stem>_0000.wav`).
 """
 
 import argparse
@@ -33,17 +41,6 @@ import torchaudio
 import librosa
 import torch
 from typing import List
-
-# Ensure local src/ is importable when running as a script
-try:
-    from src.split_assigner import assign_split, next_destination, append_csv
-except ModuleNotFoundError:
-    import sys as _sys
-    from pathlib import Path as _Path
-    _root = _Path(__file__).resolve().parents[1]
-    if str(_root) not in _sys.path:
-        _sys.path.insert(0, str(_root))
-    from src.split_assigner import assign_split, next_destination, append_csv
 
 
 AUDIO_EXTS: List[str] = [
@@ -90,6 +87,11 @@ def parse_args() -> argparse.Namespace:
         help="Filename prefix for saved clips. Defaults to <name>.",
     )
     parser.add_argument(
+        "--prefix-from-parent",
+        action="store_true",
+        help="Use the source file's parent folder name as the prefix per file (e.g., accept/reject)",
+    )
+    parser.add_argument(
         "--keep-remainder",
         action="store_true",
         help="If set, also saves a final clip shorter than --seconds (if any).",
@@ -114,13 +116,6 @@ def parse_args() -> argparse.Namespace:
             "Higher removes more; default: 30."
         ),
     )
-    # Split-at-save options
-    parser.add_argument("--split-at-save", action="store_true", help="Save clips directly into train/val/test under splits")
-    parser.add_argument("--split-name", default=None, help="Dataset name under data/custom_dataset/splits/ (required with --split-at-save)")
-    parser.add_argument("--split-label-from", choices=["prefix", "parent"], default="prefix", help="How to derive labels for splits: from filename prefix or parent folder")
-    parser.add_argument("--split-sizes", nargs=3, type=int, default=[80, 10, 10], metavar=("TRAIN", "VAL", "TEST"), help="Split percentages that sum to 100")
-    parser.add_argument("--split-seed", type=int, default=42, help="Seed for split assignment (stable)")
-    parser.add_argument("--also-save-flat", action="store_true", help="When splitting at save, also write clips to the flat output folder")
     return parser.parse_args()
 
 
@@ -195,11 +190,6 @@ def main() -> int:
         return 0
 
     print(f"[INFO] Found {len(files_to_process)} file(s) to process from {input_path}")
-    if args.split_at_save:
-        if not args.split_name:
-            print("[ERROR] --split-name is required when using --split-at-save", file=sys.stderr)
-            return 8
-        print(f"[INFO] Split-at-save: dataset={args.split_name}, sizes={tuple(args.split_sizes)}, seed={args.split_seed}")
 
     total_saved = 0
     for ap in files_to_process:
@@ -246,7 +236,10 @@ def main() -> int:
         # Output directory logic (flat output folder)
         file_out_dir = out_base
         safe_stem = ap.stem
-        if input_path.is_file():
+        if args.prefix_from_parent:
+            # Include class folder (e.g., accept/reject) for labeling via prefix
+            prefix = f"{ap.parent.name}_{safe_stem}"
+        elif input_path.is_file():
             # Backward-compatible single-file naming
             prefix = args.prefix or out_name
         else:
@@ -269,66 +262,23 @@ def main() -> int:
             end = start + clip_len_samples
             clip = waveform[:, start:end]
             flat_out = file_out_dir / f"{prefix}_{i:0{zpad}d}.wav"
-            if args.split_at_save:
-                # Determine label for split
-                if args.split_label_from == "parent":
-                    label = ap.parent.name
-                else:
-                    # From filename prefix before first underscore
-                    label = prefix.split("_", 1)[0]
-                source_id = f"{prefix}_{i:0{zpad}d}"
-                split = assign_split(label=label, source_id=source_id, seed=int(args.split_seed), splits=tuple(args.split_sizes))
-                dst = next_destination(Path("data/custom_dataset/splits"), args.split_name, "audio", split, label, ".wav")
-                try:
-                    torchaudio.save(str(dst), clip, sample_rate)
-                    append_csv(Path("data/custom_dataset/splits"), args.split_name, "audio", split, dst, label, flat_out)
-                except Exception as e:
-                    print(f"[WARN] Failed to save split clip {i} for {ap.name} ({dst}): {e}")
-                    continue
-                if args.also_save_flat:
-                    try:
-                        torchaudio.save(str(flat_out), clip, sample_rate)
-                    except Exception as e:
-                        print(f"[WARN] Failed to also save flat clip {i} for {ap.name} ({flat_out}): {e}")
-                saved += 1
-            else:
-                try:
-                    torchaudio.save(str(flat_out), clip, sample_rate)
-                except Exception as e:
-                    print(f"[WARN] Failed to save clip {i} for {ap.name} ({flat_out}): {e}")
-                    continue
-                saved += 1
+            try:
+                torchaudio.save(str(flat_out), clip, sample_rate)
+            except Exception as e:
+                print(f"[WARN] Failed to save clip {i} for {ap.name} ({flat_out}): {e}")
+                continue
+            saved += 1
 
         # Save remainder if requested
         if remainder > 0 and args.keep_remainder:
             start = num_full * clip_len_samples
             clip = waveform[:, start:]
             flat_out = file_out_dir / f"{prefix}_{num_full:0{zpad}d}.wav"
-            if args.split_at_save:
-                if args.split_label_from == "parent":
-                    label = ap.parent.name
-                else:
-                    label = prefix.split("_", 1)[0]
-                source_id = f"{prefix}_{num_full:0{zpad}d}"
-                split = assign_split(label=label, source_id=source_id, seed=int(args.split_seed), splits=tuple(args.split_sizes))
-                dst = next_destination(Path("data/custom_dataset/splits"), args.split_name, "audio", split, label, ".wav")
-                try:
-                    torchaudio.save(str(dst), clip, sample_rate)
-                    append_csv(Path("data/custom_dataset/splits"), args.split_name, "audio", split, dst, label, flat_out)
-                    saved += 1
-                except Exception as e:
-                    print(f"[WARN] Failed to save split remainder clip for {ap.name} ({dst}): {e}")
-                if args.also_save_flat:
-                    try:
-                        torchaudio.save(str(flat_out), clip, sample_rate)
-                    except Exception as e:
-                        print(f"[WARN] Failed to also save flat remainder clip for {ap.name} ({flat_out}): {e}")
-            else:
-                try:
-                    torchaudio.save(str(flat_out), clip, sample_rate)
-                    saved += 1
-                except Exception as e:
-                    print(f"[WARN] Failed to save remainder clip for {ap.name} ({flat_out}): {e}")
+            try:
+                torchaudio.save(str(flat_out), clip, sample_rate)
+                saved += 1
+            except Exception as e:
+                print(f"[WARN] Failed to save remainder clip for {ap.name} ({flat_out}): {e}")
 
         if saved == 0:
             print(f"[WARN] No clips saved for {ap.name}. Consider --keep-remainder or a shorter --seconds.")

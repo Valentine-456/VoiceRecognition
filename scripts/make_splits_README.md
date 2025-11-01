@@ -35,4 +35,4 @@ Outputs
   - CSVs: `train.csv`, `val.csv`, `test.csv` with columns `filepath,label,source`.
 
 Notes
-- Use this to retrofit older flat datasets. For new data, consider using the split‑at‑save options in `clip_audio.py` and `generate_spectrograms.py` to skip the copy step.
+- This is the default way to create train/val/test splits. First generate clips and/or spectrograms, then run this script to build stratified splits and CSVs.

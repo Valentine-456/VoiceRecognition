@@ -5,6 +5,7 @@ Pipeline: clip audio (with optional silence removal) then generate spectrograms.
 This script orchestrates:
   1) scripts/clip_audio.py
   2) scripts/generate_spectrograms.py
+  3) (optional) scripts/make_splits.py
 
 Usage example:
   python scripts/preprocess_dataset.py \
@@ -16,11 +17,13 @@ Usage example:
     --spec-output-name clips_specs \
     --spec-format png \
     --spec-type mel \
-    --spec-sr 16000
+    --spec-sr 16000 \
+    --do-split --split-target specs --split-ext .png --split-output-name dataset_v1
 
 Notes:
   - All clips are written to data/custom_dataset/audio/<clips-name>/
   - Spectrograms are written to data/custom_dataset/spectrograms/<spec-output-name>/
+  - Splits are created post-hoc using scripts/make_splits.py (optionally via --do-split)
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seconds", type=float, required=True, help="Clip length in seconds")
     p.add_argument("--clips-name", required=True, help="Output folder name under data/custom_dataset/audio/")
     p.add_argument("--clip-prefix", default=None, help="Optional filename prefix for clips")
+    p.add_argument("--clip-prefix-from-parent", action="store_true", help="Use source file's parent folder as per-file prefix (e.g., accept/reject)")
     p.add_argument("-r", "--recursive", action="store_true", help="Recurse when input is a directory")
     p.add_argument("--keep-remainder", action="store_true", help="Keep final short clip")
     p.add_argument("--clip-target-sr", type=int, default=None, help="Resample target SR for clipping step")
@@ -60,14 +64,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--spec-grayscale", action="store_true", help="Save PNGs as grayscale")
     p.add_argument("--spec-image-scale", type=float, default=1.0, help="Scale factor for PNG size")
     p.add_argument("--spec-cmap", default="magma", help="Colormap for PNGs when not grayscale")
-
-    # Split-at-save (route outputs directly into splits as they are created)
-    p.add_argument("--save-split", choices=["off", "clips", "specs", "both"], default="off", help="Send outputs directly to train/val/test (off by default)")
-    p.add_argument("--save-split-name", default=None, help="Dataset name under data/custom_dataset/splits/ when using --save-split")
-    p.add_argument("--save-split-label-from", choices=["prefix", "parent"], default="prefix", help="How to derive labels for save-time split")
-    p.add_argument("--save-split-sizes", nargs=3, type=int, default=[80, 10, 10], metavar=("TRAIN", "VAL", "TEST"), help="Split percentages for save-time split")
-    p.add_argument("--save-split-seed", type=int, default=42, help="Seed for save-time split assignment")
-    p.add_argument("--save-split-also-flat", action="store_true", help="Also save flat files alongside splits when using save-time split")
 
     # Optional split creation
     p.add_argument("--do-split", action="store_true", help="Create stratified train/val/test splits after spectrograms")
@@ -97,26 +93,14 @@ def main() -> int:
     ]
     if args.clip_prefix:
         clip_cmd += ["--prefix", args.clip_prefix]
+    if args.clip_prefix_from_parent:
+        clip_cmd += ["--prefix-from-parent"]
     if args.recursive:
         clip_cmd += ["-r"]
     if args.keep_remainder:
         clip_cmd += ["--keep-remainder"]
     if args.clip_target_sr:
         clip_cmd += ["--target-sr", str(args.clip_target_sr)]
-    if args.save_split in ("clips", "both"):
-        if not args.save_split_name:
-            print("[PIPELINE][ERROR] --save-split-name is required when --save-split is clips/both", file=sys.stderr)
-            return 2
-        clip_cmd += [
-            "--split-at-save",
-            "--split-name", args.save_split_name,
-            "--split-label-from", args.save_split_label_from,
-            "--split-sizes", str(args.save_split_sizes[0]), str(args.save_split_sizes[1]), str(args.save_split_sizes[2]),
-            "--split-seed", str(args.save_split_seed),
-        ]
-        if args.save_split_also_flat:
-            clip_cmd += ["--also-save-flat"]
-
     print(f"[PIPELINE] Running clip step: {' '.join(clip_cmd)}")
     rc = subprocess.call(clip_cmd)
     if rc != 0:
@@ -145,19 +129,6 @@ def main() -> int:
     ]
     if args.spec_grayscale:
         spec_cmd += ["--grayscale"]
-    if args.save_split in ("specs", "both"):
-        if not args.save_split_name:
-            print("[PIPELINE][ERROR] --save-split-name is required when --save-split is specs/both", file=sys.stderr)
-            return 2
-        spec_cmd += [
-            "--split-at-save",
-            "--split-name", args.save_split_name,
-            "--split-label-from", args.save_split_label_from,
-            "--split-sizes", str(args.save_split_sizes[0]), str(args.save_split_sizes[1]), str(args.save_split_sizes[2]),
-            "--split-seed", str(args.save_split_seed),
-        ]
-        if args.save_split_also_flat:
-            spec_cmd += ["--also-save-flat"]
     print(f"[PIPELINE] Running spectrogram step: {' '.join(spec_cmd)}")
     rc = subprocess.call(spec_cmd)
     if rc != 0:
