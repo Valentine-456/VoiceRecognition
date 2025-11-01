@@ -37,22 +37,6 @@ Behavior
 Tips
 - To reduce size/complexity: lower `--n-mels`, increase `--hop-length`, apply pooling (`--time-pool`, `--freq-pool`), and/or use `--sr 8000`.
 
-Split-at-save (optional)
-- Send spectrograms directly into train/val/test under `data/custom_dataset/splits/<dataset>/spectrograms/` and append CSVs.
-- Flags:
-  - `--split-at-save` (flag): Enable split-at-save.
-  - `--split-name` (str): Dataset folder under `data/custom_dataset/splits/` (required with `--split-at-save`).
-  - `--split-label-from` (prefix | parent): Use filename prefix (default) or parent folder for label.
-  - `--split-sizes` (three ints, default `80 10 10`): Percentages for train/val/test.
-  - `--split-seed` (int, default `42`): Seed for stable assignment.
-  - `--also-save-flat` (flag): Also save to `data/custom_dataset/spectrograms/<output_name>/`.
-
-Example (save .pt tensors directly into splits):
-```
-python scripts/generate_spectrograms.py \
-  --input-dir data/custom_dataset/audio/clips \
-  --output-name specs \
-  --sr 16000 --type mel --format pt \
-  --split-at-save --split-name dataset_v1 \
-  --split-label-from prefix --split-sizes 80 10 10 --split-seed 42
-```
+Next step: create dataset splits
+- After generating spectrograms, create train/val/test splits using the standalone splitter:
+  - `python scripts/make_splits.py --input-dir data/custom_dataset/spectrograms/<output_name> --ext .pt --label-from prefix --splits 80 10 10 --seed 42 --output-name dataset_v1`

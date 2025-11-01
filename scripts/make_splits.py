@@ -49,11 +49,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=42, help="Random seed for shuffling")
     p.add_argument("--output-name", required=True, help="Name under data/custom_dataset/splits/")
     p.add_argument("--recursive", action="store_true", help="Search input dir recursively")
-    p.add_argument(
-        "--link",
-        action="store_true",
-        help="Create symlinks instead of copying files into split directories",
-    )
     return p.parse_args()
 
 
@@ -157,17 +152,7 @@ def main() -> int:
             new_name = f"{label}_{split_name}_{idx:03d}{src_path.suffix.lower()}"
             dst_path = out_root / split_name / new_name
 
-            if args.link:
-                try:
-                    # Remove existing broken link if any, then symlink
-                    if dst_path.exists() or dst_path.is_symlink():
-                        dst_path.unlink()
-                    dst_path.symlink_to(src_path.resolve())
-                except Exception as e:
-                    print(f"[WARN] Failed to symlink {src_path} -> {dst_path}: {e}. Falling back to copy.")
-                    shutil.copy2(src_path, dst_path)
-            else:
-                shutil.copy2(src_path, dst_path)
+            shutil.copy2(src_path, dst_path)
 
             rel_dst = dst_path.as_posix()
             csv_rows[split_name].append((rel_dst, label, src_path.as_posix()))
@@ -184,4 +169,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
