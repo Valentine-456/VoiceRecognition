@@ -6,7 +6,7 @@ What it does
 - Finds files by extension (e.g., `.pt`, `.png`, `.wav`).
 - Derives a class label per file (`prefix` or `parent`).
 - Stratifies by label into train/val/test with your percentages.
-- Copies (or symlinks) files into split folders and writes CSVs.
+- Copies files into split folders and writes CSVs.
 - Filenames in splits: `<label>_<split>_<idx><ext>` (e.g., `ObamaSpeech_train_000.pt`).
 
 Examples
@@ -27,7 +27,6 @@ Arguments
 - `--seed` (int; default 42): RNG seed for shuffling per label.
 - `--output-name` (str): Name under `data/custom_dataset/splits/`.
 - `--recursive` (flag): Search subfolders.
-- `--link` (flag): Use symlinks instead of copying files.
 
 Outputs
 - `data/custom_dataset/splits/<output_name>/`:

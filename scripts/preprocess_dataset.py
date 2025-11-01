@@ -47,6 +47,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--keep-remainder", action="store_true", help="Keep final short clip")
     p.add_argument("--clip-target-sr", type=int, default=None, help="Resample target SR for clipping step")
     p.add_argument("--silence-top-db", type=float, default=30.0, help="Silence removal threshold (dB)")
+    p.add_argument("--full-reverse-audio", action="store_true", help="Before clipping, create reversed copies of full audio in-place")
+    p.add_argument("--full-noise-audio", action="store_true", help="Before clipping, create noise-augmented copies of full audio in-place")
+    p.add_argument("--full-noise-snr-db", type=float, default=10.0, help="SNR in dB for noise augmentation (default 10.0)")
 
     # Spectrogram options
     p.add_argument(
@@ -74,13 +77,32 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--split-sizes", nargs=3, type=int, default=[80, 10, 10], metavar=("TRAIN", "VAL", "TEST"), help="Split percentages that sum to 100")
     p.add_argument("--split-seed", type=int, default=42, help="Random seed for split")
     p.add_argument("--split-recursive", action="store_true", help="Search input dir recursively for split")
-    p.add_argument("--split-link", action="store_true", help="Symlink instead of copying files into split dirs")
+    # Splitter copies files by default; no symlink option exposed
 
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+
+    # 0) audio augmentation before clipping
+    if args.full_reverse_audio or args.full_noise_audio:
+        aug_cmd = [
+            sys.executable,
+            str(Path("scripts/augment_full_audio.py")),
+            "--input-dir", args.input,
+        ]
+        if args.recursive:
+            aug_cmd += ["--recursive"]
+        if args.full_reverse_audio:
+            aug_cmd += ["--reverse"]
+        if args.full_noise_audio:
+            aug_cmd += ["--noise", "--noise-snr-db", str(args.full_noise_snr_db)]
+        print(f"[PIPELINE] Running full-audio augmentation: {' '.join(aug_cmd)}")
+        rc = subprocess.call(aug_cmd)
+        if rc != 0:
+            print(f"[PIPELINE][ERROR] Augmentation step failed with exit code {rc}", file=sys.stderr)
+            return rc
 
     # 1) Clip step
     clip_cmd = [
@@ -136,7 +158,7 @@ def main() -> int:
         return rc
 
     print("[PIPELINE][OK] Finished clipping and spectrogram generation.")
-    # Optional split step
+    # split step
     if not args.do_split:
         return 0
 
@@ -163,8 +185,6 @@ def main() -> int:
     ]
     if args.split_recursive:
         split_cmd += ["--recursive"]
-    if args.split_link:
-        split_cmd += ["--link"]
 
     print(f"[PIPELINE] Running split step: {' '.join(split_cmd)}")
     rc = subprocess.call(split_cmd)
