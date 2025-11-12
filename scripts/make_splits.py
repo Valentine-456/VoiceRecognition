@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-Create stratified train/val/test splits from a folder of files (clips or spectrograms).
-
-Features
-- Stratified by label
-- Copies files into train/val/test directories with clear names like label_split_000.ext
-- Writes CSVs listing file path and label
-
-Label parsing
-- prefix: label is the part of the filename stem before the first underscore
-  e.g., ObamaSpeech_0010.pt -> label=ObamaSpeech
-- parent: label is the parent directory name
-
-Outputs
-- data/custom_dataset/splits/<output_name>/
-  - train/, val/, test/
-  - train.csv, val.csv, test.csv (columns: filepath,label,source)
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -26,6 +7,8 @@ import random
 import shutil
 from pathlib import Path
 from typing import Dict, List, Tuple
+
+from file_utils import collect_files
 
 
 def parse_args() -> argparse.Namespace:
@@ -52,25 +35,9 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def find_files(root: Path, ext: str, recursive: bool) -> List[Path]:
-    ext = ext.lower()
-    files: List[Path] = []
-    if recursive:
-        for p in root.rglob("*"):
-            if p.is_file() and p.suffix.lower() == ext:
-                files.append(p)
-    else:
-        for p in root.iterdir():
-            if p.is_file() and p.suffix.lower() == ext:
-                files.append(p)
-    files.sort()
-    return files
-
-
 def get_label(p: Path, label_from: str) -> str:
     if label_from == "parent":
         return p.parent.name
-    # prefix from stem before first underscore
     stem = p.stem
     return stem.split("_", 1)[0] if "_" in stem else stem
 
@@ -81,7 +48,6 @@ def stratified_split(items: List[Tuple[Path, str]], splits: Tuple[int, int, int]
     if total_pct != 100:
         raise ValueError(f"splits must sum to 100, got {total_pct}")
 
-    # group by label
     by_label: Dict[str, List[Path]] = {}
     for p, lbl in items:
         by_label.setdefault(lbl, []).append(p)
@@ -94,7 +60,6 @@ def stratified_split(items: List[Tuple[Path, str]], splits: Tuple[int, int, int]
         n = len(paths)
         n_train = round(n * train_pct / 100)
         n_val = round(n * val_pct / 100)
-        # ensure total counts match n (account for rounding)
         n_test = n - n_train - n_val
 
         train_paths = paths[:n_train]
@@ -112,7 +77,7 @@ def write_csv(csv_path: Path, rows: List[Tuple[str, str, str]]) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["filepath", "label", "source"])  # headers
+        w.writerow(["filepath", "label", "source"])
         w.writerows(rows)
 
 
@@ -124,14 +89,14 @@ def main() -> int:
         print(f"[ERROR] Input directory not found: {in_dir}")
         return 2
 
-    files = find_files(in_dir, args.ext, args.recursive)
+    files = collect_files(in_dir, [args.ext], args.recursive)
     if not files:
         print(f"[WARN] No files with extension {args.ext} found in {in_dir}")
         return 0
 
     items: List[Tuple[Path, str]] = [(p, get_label(p, args.label_from)) for p in files]
 
-    splits = tuple(args.splits)  # type: ignore[assignment]
+    splits: Tuple[int, int, int] = (args.splits[0], args.splits[1], args.splits[2])
     split_map = stratified_split(items, splits, args.seed)
 
     out_root = Path("data/custom_dataset/splits") / args.output_name
@@ -141,7 +106,6 @@ def main() -> int:
 
     csv_rows: Dict[str, List[Tuple[str, str, str]]] = {"train": [], "val": [], "test": []}
 
-    # Maintain per-label counters for naming
     per_label_counts: Dict[Tuple[str, str], int] = {}
 
     for split_name in ("train", "val", "test"):
@@ -157,7 +121,6 @@ def main() -> int:
             rel_dst = dst_path.as_posix()
             csv_rows[split_name].append((rel_dst, label, src_path.as_posix()))
 
-    # Write CSVs
     write_csv(out_root / "train.csv", csv_rows["train"]) 
     write_csv(out_root / "val.csv", csv_rows["val"]) 
     write_csv(out_root / "test.csv", csv_rows["test"]) 

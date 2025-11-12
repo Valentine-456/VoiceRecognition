@@ -1,42 +1,43 @@
-# Generate Spectrograms (scripts/generate_spectrograms.py)
+# scripts/generate_spectrograms.py
 
-Convert a folder of audio files into spectrograms saved as PNG images, PyTorch tensors (.pt), or both. Outputs are written to `data/custom_dataset/spectrograms/<output_name>/`.
+## What the script does
+Converts every audio file in a directory into spectrograms saved as PNGs, PyTorch tensors, or both under `data/custom_dataset/spectrograms/<output_name>/`.
 
-Examples
-- Basic mel spectrograms (PNG)
-  - `python scripts/generate_spectrograms.py --input-dir data/custom_dataset/audio/clips --output-name specs --sr 16000 --type mel --format png`
-- Save PyTorch tensors instead of PNGs
-  - `python scripts/generate_spectrograms.py --input-dir data/custom_dataset/audio/clips --output-name specs_pt --sr 16000 --type mel --format pt`
-- Lower‑resolution PNGs for CNNs
-  - `python scripts/generate_spectrograms.py --input-dir data/custom_dataset/audio/clips --output-name specs_low --sr 16000 --type mel --format png --time-pool 2 --freq-pool 2 --pool-mode avg --grayscale --image-scale 0.5`
+## Where it is used
+Run it after `scripts/clip_audio.py` (directly or through `scripts/preprocess_dataset.py`) to create model-ready spectrogram inputs; it feeds the CNN defined in `src/voice_cnn.py`.
 
-Arguments
-- Core
-  - `--input-dir` (path): Folder with audio files.
-  - `--output-name` (str): Folder name under `data/custom_dataset/spectrograms/`.
-  - `--sr` (int, default 16000): Target sample rate when loading audio.
-  - `--type` (mel | linear, default mel): Spectrogram type.
-  - `--format` (png | pt | both, default png): Save as images, tensors, or both.
-  - `--recursive` (flag): Search subfolders.
-  - `--mono` / `--stereo` (flags; default mono): Convert to mono or keep stereo when loading.
-- Resolution/quality controls
-  - `--n-fft` (int, default 1024): FFT window size.
-  - `--hop-length` (int, default 256): Time step between frames (larger = fewer frames).
-  - `--n-mels` (int, default 80): Number of mel bands (fewer = coarser vertical detail; mel only).
-  - `--time-pool` (int ≥ 1, default 1): Downsample along time after computation (1=no downsample; 2=half; 3=third).
-  - `--freq-pool` (int ≥ 1, default 1): Downsample along frequency after computation.
-  - `--pool-mode` (avg | max, default avg): How pooling merges blocks.
-  - `--grayscale` (flag): Save PNGs in grayscale.
-  - `--cmap` (str, default magma): Colormap for PNGs when not grayscale.
-  - `--image-scale` (float > 0, default 1.0): Scales saved PNG size (0.5 halves width/height).
+## How it works
+The script loads audio with librosa at a fixed sample rate, computes either mel or linear spectrograms, optionally downsamples along time/frequency, then saves PNGs (matplotlib) and/or `.pt` tensors (torch) for each source file.
 
-Behavior
-- PNGs are rendered with axes removed and tight bounds for ML ingestion.
-- `.pt` saves tensors directly and is recommended for CNN training to avoid image decoding overhead.
+## Example command
+```bash
+python scripts/generate_spectrograms.py \
+  --input-dir data/custom_dataset/audio/clips_v1 \
+  --output-name specs_v1 \
+  --sr 16000 \
+  --type mel \
+  --format both \
+  --time-pool 2 \
+  --freq-pool 2 \
+  --pool-mode avg \
+  --grayscale
+```
 
-Tips
-- To reduce size/complexity: lower `--n-mels`, increase `--hop-length`, apply pooling (`--time-pool`, `--freq-pool`), and/or use `--sr 8000`.
-
-Next step: create dataset splits
-- After generating spectrograms, create train/val/test splits using the standalone splitter:
-  - `python scripts/make_splits.py --input-dir data/custom_dataset/spectrograms/<output_name> --ext .pt --label-from prefix --splits 80 10 10 --seed 42 --output-name dataset_v1`
+## Parameters and flags
+- `--input-dir DIR` (required): Directory containing audio clips.
+- `--output-name TEXT` (required): Subfolder name under `data/custom_dataset/spectrograms/`.
+- `--sr INT` (default `16000`): Sample rate to use when loading audio.
+- `--type {mel,linear}` (default `mel`): Spectrogram variant.
+- `--n-fft INT` (default `1024`): FFT window size.
+- `--hop-length INT` (default `256`): Hop length between FFT windows.
+- `--n-mels INT` (default `80`): Number of mel bins (mel mode only).
+- `--time-pool INT` (default `1`): Downsample factor along the time axis after computation.
+- `--freq-pool INT` (default `1`): Downsample factor along the frequency axis.
+- `--pool-mode {avg,max}` (default `avg`): Pooling operation for downsampling.
+- `--grayscale` (flag): Render PNGs in grayscale.
+- `--cmap NAME` (default `magma`): Colormap for PNGs when not using grayscale.
+- `--image-scale FLOAT` (default `1.0`): Scale factor for PNG resolution.
+- `--mono` (flag, default): Collapse to mono during loading.
+- `--stereo` (flag): Keep stereo channels.
+- `--format {png,pt,both}` (default `png`): Output format selection.
+- `--recursive` (flag): Recurse into subdirectories when gathering audio.

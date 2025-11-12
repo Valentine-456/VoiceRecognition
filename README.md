@@ -80,11 +80,10 @@ python scripts/preprocess_dataset.py \
 - Clip (scripts/clip_audio.py)
   - `--seconds`: clip length
   - `--clips-name`: output folder under `data/custom_dataset/audio/`
-  - `--clip-prefix`: filename prefix (optional)
-  - `--clip-prefix-from-parent`: use parent folder (accept/reject) as prefix
-  - `--keep-remainder`: keep final short clip
-  - `--clip-target-sr`: resample before clipping (e.g., 16000)
-  - `--silence-top-db`: silence removal threshold (dB, default 30)
+- `--clip-prefix`: filename prefix (optional)
+- `--clip-prefix-from-parent`: use parent folder (accept/reject) as prefix
+- `--clip-target-sr`: resample before clipping (e.g., 16000)
+- `--silence-top-db`: silence removal threshold (dB, default 30)
 
 - Spectrograms (scripts/generate_spectrograms.py)
   - `--spec-output-name`: folder under `data/custom_dataset/spectrograms/`
