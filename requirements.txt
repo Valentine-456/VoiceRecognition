@@ -3,6 +3,7 @@ numpy<2
 pandas
 torch
 torchaudio
+torchvision
 librosa
 soundfile
 matplotlib
