@@ -1,34 +1,32 @@
-# Clip Audio Script (scripts/clip_audio.py)
+# scripts/clip_audio.py
 
-Split audio into fixed-length clips with optional silence removal. Works on a single file or a directory (with optional recursion). All clips are written to `data/custom_dataset/audio/<name>/`.
+## What the script does
+Cuts a single audio file or an entire directory of files into fixed-length WAV clips while optionally trimming silence beforehand.
 
-Examples
-- Single file
-  - `python scripts/clip_audio.py --input data/full_audio_files/ObamaSpeech.mp3 --seconds 10 --name obama_clips --keep-remainder --target-sr 16000`
-- Directory (non-recursive)
-  - `python scripts/clip_audio.py --input data/full_audio_files --seconds 3 --name all_clips --silence-top-db 40`
-- Directory (recursive)
-  - `python scripts/clip_audio.py --input data/full_audio_files --seconds 3 --name all_clips_recursive -r`
+## Where it is used
+Use it whenever you need raw clips under `data/custom_dataset/audio/<name>`; it is also invoked automatically inside `scripts/preprocess_dataset.py` after any optional augmentation.
 
-Arguments
-- `--input` (path): Audio file or directory to process.
-- `--seconds` (float > 0): Clip length in seconds (e.g., 3, 5, 10).
-- `--name` (str): Output folder under `data/custom_dataset/audio/`.
-- `--prefix` (str, optional): Filename prefix for clips. Defaults to `--name` in single‑file mode; in directory mode, the source file’s stem is used unless you provide a prefix (then `<prefix>_<stem>_####.wav`).
-- `--keep-remainder` (flag): Also save the final short clip if leftover audio exists.
-- `--target-sr` (int, optional): Resample target sample rate (e.g., 16000) before splitting.
-- `--silence-top-db` (float, default 30): Remove all silent regions before splitting. Higher removes more (typical 20–60).
-- `-r`, `--recursive` (flag): When input is a directory, include subfolders.
+## How it works
+The script loads each audio file with torchaudio, resamples if requested, removes silence via `librosa.effects.split`, then slices the waveform into contiguous N-second windows and saves numbered WAV files with deterministic prefixes.
 
-Behavior
-- Silence removal uses a mono reference with `librosa.effects.split` and concatenates non‑silent parts across channels. If silence removal fails (e.g., NumPy mismatch), the script logs a warning and proceeds without it.
-- Output naming is flat in `data/custom_dataset/audio/<name>/`.
-  - Single file: `<prefix>_0000.wav`, `<prefix>_0001.wav`, ... (default prefix = `<name>`)
-  - Directory input: `<stem>_0000.wav`, ... or `<prefix>_<stem>_0000.wav` if `--prefix` is provided.
+## Example command
+```bash
+python scripts/clip_audio.py \
+  --input data/full_audio_files \
+  --seconds 3 \
+  --name clips_v1 \
+  --silence-top-db 40 \
+  --target-sr 16000 \
+  --prefix-from-parent \
+  -r
+```
 
-Notes
-- Supported formats depend on torchaudio (e.g., wav, mp3, flac, ogg, m4a).
-
-Next step: create dataset splits
-- After generating clips, create train/val/test splits using the standalone splitter:
-  - `python scripts/make_splits.py --input-dir data/custom_dataset/audio/<name> --ext .wav --label-from prefix --splits 80 10 10 --seed 42 --output-name dataset_v1`
+## Parameters and flags
+- `--input PATH` (required): Audio file or directory to process.
+- `--seconds FLOAT` (required): Clip duration in seconds; must be positive.
+- `--name TEXT` (required): Output folder inside `data/custom_dataset/audio/`.
+- `--prefix TEXT`: Filename prefix; defaults to the `--name` (single-file mode) or source stem (directory mode).
+- `--prefix-from-parent` (flag): Prepend the source file’s parent folder name to each saved file for label retention.
+- `-r`, `--recursive` (flag): When the input is a directory, search through subdirectories.
+- `--target-sr INT`: Resample audio before splitting.
+- `--silence-top-db FLOAT` (default `30.0`): Threshold for removing silence with librosa.

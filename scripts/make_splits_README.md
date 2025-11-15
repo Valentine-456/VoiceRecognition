@@ -1,37 +1,30 @@
-# Make Splits (scripts/make_splits.py)
+# scripts/make_splits.py
 
-Create stratified train/val/test splits from a folder of files (clips or spectrograms).
+## What the script does
+Builds stratified train/val/test directories plus CSV manifests from a folder of existing files (clips or spectrograms).
 
-What it does
-- Finds files by extension (e.g., `.pt`, `.png`, `.wav`).
-- Derives a class label per file (`prefix` or `parent`).
-- Stratifies by label into train/val/test with your percentages.
-- Copies files into split folders and writes CSVs.
-- Filenames in splits: `<label>_<split>_<idx><ext>` (e.g., `ObamaSpeech_train_000.pt`).
+## Where it is used
+Run it after generating clips or spectrograms to prepare datasets for training; `scripts/preprocess_dataset.py` can invoke it automatically when `--do-split` is set.
 
-Examples
-- Split spectrogram tensors (.pt):
-  - `python scripts/make_splits.py --input-dir data/custom_dataset/spectrograms/specs_regular --ext .pt --label-from prefix --splits 80 10 10 --seed 42 --output-name specs_regular_split`
-- Split PNG spectrograms:
-  - `python scripts/make_splits.py --input-dir data/custom_dataset/spectrograms/specs_regular --ext .png --label-from prefix --splits 80 10 10 --seed 42 --output-name specs_regular_png_split`
-- Split clips (.wav):
-  - `python scripts/make_splits.py --input-dir data/custom_dataset/audio/clips_regular --ext .wav --label-from prefix --splits 80 10 10 --seed 42 --output-name clips_regular_split`
+## How it works
+The script scans for files with a given extension, infers a label from either the filename prefix or the parent directory, shuffles per label with a fixed seed, picks counts based on your split percentages, copies files into `train/`, `val/`, and `test/`, and writes CSVs recording `filepath,label,source`.
 
-Arguments
-- `--input-dir` (path): Folder to scan.
-- `--ext` (e.g., .pt, .png, .wav): File extension to include.
-- `--label-from` (prefix | parent):
-  - `prefix` (default): label is filename stem up to first underscore (e.g., `ObamaSpeech_0001.pt` → `ObamaSpeech`).
-  - `parent`: label is the parent directory name.
-- `--splits` (three ints; default `80 10 10`): Percentages for train, val, test; must sum to 100.
-- `--seed` (int; default 42): RNG seed for shuffling per label.
-- `--output-name` (str): Name under `data/custom_dataset/splits/`.
-- `--recursive` (flag): Search subfolders.
+## Example command
+```bash
+python scripts/make_splits.py \
+  --input-dir data/custom_dataset/spectrograms/specs_v1 \
+  --ext .pt \
+  --label-from prefix \
+  --splits 80 10 10 \
+  --seed 42 \
+  --output-name specs_v1_split
+```
 
-Outputs
-- `data/custom_dataset/splits/<output_name>/`:
-  - Folders: `train/`, `val/`, `test/` (each contains renamed files).
-  - CSVs: `train.csv`, `val.csv`, `test.csv` with columns `filepath,label,source`.
-
-Notes
-- This is the default way to create train/val/test splits. First generate clips and/or spectrograms, then run this script to build stratified splits and CSVs.
+## Parameters and flags
+- `--input-dir DIR` (required): Folder containing the files to split.
+- `--ext .EXT` (required): File extension to include (e.g., `.pt`, `.png`, `.wav`).
+- `--label-from {prefix,parent}` (default `prefix`): Label inference method (`prefix` takes text before the first underscore, `parent` uses the parent directory name).
+- `--splits TRAIN VAL TEST` (default `80 10 10`): Percentages for train/val/test; must total 100.
+- `--seed INT` (default `42`): RNG seed for the per-label shuffle.
+- `--output-name TEXT` (required): Subdirectory name under `data/custom_dataset/splits/`.
+- `--recursive` (flag): Recurse into subdirectories when scanning input files.
