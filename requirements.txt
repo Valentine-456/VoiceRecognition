@@ -9,3 +9,11 @@ soundfile
 matplotlib
 scikit-learn
 tqdm
+PyQt5
+sounddevice
+numba
+ipykernel
+seaborn
+scikit-learn
+praat-parselmouth
+torchcodec
