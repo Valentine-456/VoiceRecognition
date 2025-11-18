@@ -1,13 +1,4 @@
-# Voice Recognition 
----
-### Other Script Docs
-- Audio clipping: `scripts/clip_audio_README.md`
-- Spectrogram generation: `scripts/generate_spectrograms_README.md`
-- Make stratified splits: `scripts/make_splits_README.md`
-The goal of the project is to prepare a machine learning module that can be hypothetically used in an automated, voice-based intercom device. Imagine that you are working in a team of several programmers and the access to your floor is restricted with doors. There is an intercom that can be used to open the door. You are implementing a machine learning module that will recognize if a given person has the permission to open the door or not.
-
----
-
+# Voice Recognition
 ### Folder Descriptions
 
 | Folder          | Purpose                                                     |
@@ -48,23 +39,25 @@ pip install -r requirements.txt
 
 ## Full Pipeline: Audio files → Spectrogram's
 
-Use `scripts/preprocess_dataset.py` to run both steps in sequence.
+Use `scripts/preprocess_dataset.py` conver your voice data into spectrogram sata set.
 
 ### Preset Pipeline Examples
 
-- Do it all single command for converting audio files to split spectrogram. To make it work, inside `/full_audio_files` add accepted audios to `accept` sub dir and rejected audios to `reject` sun dir 
+- Do it all single command for converting audio files to split spectrogram. To make it work.
+- Create dir `/full_audio_files/accept & reject` add accepted audios to `accept` sub dir and rejected audios to `reject` sun dir 
 ```bash
 python scripts/preprocess_dataset.py \
  --input data/full_audio_files \
  --seconds 3 \
  --clips-name clips_lowerres -r \
  --clip-prefix-from-parent \
- --full-reverse-audio \
- --spec-output-name specs_lowQuality \
+ --full-noise-audio \
+ --full-noise-snr-db 10 \
+ --spec-output-name spectograms \
  --spec-format png --spec-type mel --spec-sr 8000 --spec-time-pool 3 \
  --spec-freq-pool 3 --spec-pool-mode avg \
  --do-split --split-target specs --split-ext .png \
- --split-output-name access_v1 --split-label-from prefix --split-sizes 80 10 10 --split-seed 30
+ --split-output-name v1 --split-label-from prefix --split-sizes 80 10 10 --split-seed 30
 ```
 ### Pipeline Flags (short)
 
@@ -106,4 +99,4 @@ python scripts/preprocess_dataset.py \
   - `--split-seed`: RNG seed
   - `--split-recursive`: search subfolders for splitting
 
-See script-specific READMEs under `scripts/` for details.
+See script READMEs under `scripts/` for running each step independently.
