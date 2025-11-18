@@ -1,111 +1,141 @@
-import os
-import datetime
-import numpy as np
-from pathlib import Path
-from scipy.io.wavfile import write
 import sounddevice as sd
-import ipywidgets as widgets
-from IPython.display import display
+import numpy as np
+from scipy.io.wavfile import write
 import threading
-import librosa
-import matplotlib
-matplotlib.use("Agg") 
-import matplotlib.pyplot as plt
+import datetime
+from pathlib import Path
+from IPython.display import display, Markdown
+import ipywidgets as widgets
 
-fs = 16000
-recording = []
+from PIL import Image
+from pathlib import Path
+import subprocess
+import sys
+import subprocess
+from pathlib import Path
+import time
+
+from PIL import Image
+import torch
+scripts_path = Path("../scripts").resolve() 
+sys.path.append(str(scripts_path))
+
+scripts_path = Path("../scripts").resolve()
+sys.path.append(str(scripts_path))
+
+
+
+LABELS = ["accept", "reject"] 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = SimpleVoiceCNN()
+model.load_state_dict(torch.load('cnn_model.pth', map_location=device))
+model.to(device)
+model.eval()
+
+fs_record = 16000
+recording_buf = []
 is_recording = False
-
-
 save_folder = Path("recordings")
 save_folder.mkdir(exist_ok=True)
 
-spect_folder = Path("spectrograms")
-spect_folder.mkdir(parents=True, exist_ok=True)
-
-output = widgets.Output()
-
-
 def record_thread():
-    global recording, is_recording
-    recording = []
+    global recording_buf, is_recording
+    recording_buf = []
 
     def callback(indata, frames, time, status):
         if is_recording:
-            recording.append(indata.copy())
+            recording_buf.append(indata.copy())
 
-    with sd.InputStream(samplerate=fs, channels=1, callback=callback):
+    with sd.InputStream(samplerate=fs_record, channels=1, callback=callback):
         while is_recording:
             sd.sleep(100)
 
 
-def save_spectrogram_png(spec_db: np.ndarray, out_path: Path, *, grayscale: bool, cmap: str, image_scale: float) -> None:
-    """Save a 2D spectrogram array as a PNG image (identical to reference implementation)."""
-    h, w = spec_db.shape
-    dpi = 100
-    scale = max(1e-3, float(image_scale))
-    fig_w = max(1.0, (w / dpi) * scale)
-    fig_h = max(1.0, (h / dpi) * scale)
+def process_and_predict(wav_path):
+    wav_path = Path(wav_path)
 
-    plt.figure(figsize=(fig_w, fig_h), dpi=dpi)
-    plt.axis("off")
-    chosen_cmap = "gray" if grayscale else cmap
-    plt.imshow(spec_db, origin="lower", aspect="auto", cmap=chosen_cmap)
-    plt.tight_layout(pad=0)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(out_path, bbox_inches="tight", pad_inches=0)
-    plt.close()
+    spec_name = "temp_recordings"
+    spec_folder = Path("data/custom_dataset/spectrograms") / spec_name
+    spec_folder.mkdir(parents=True, exist_ok=True)
+    
+  
 
-def compute_spectrogram(y: np.ndarray, sr: int) -> np.ndarray:
-    """Compute mel spectrogram (identical parameters to generate_spectrograms.py)."""
-    S = librosa.feature.melspectrogram(
-        y=y,
-        sr=sr,
-        n_fft=1024,
-        hop_length=256,
-        n_mels=80,
-        power=2.0
-    )
-    S_db = librosa.power_to_db(S, ref=np.max)  
-    return S_db
+    spec_cmd = [
+        sys.executable,
+        r"C:/Users/ASUS/Desktop/MachineLearning/git/scripts/generate_spectrograms.py",
+        "--input-dir", str(wav_path.parent), 
+        "--output-name", spec_name,
+        "--sr", "16000",
+        "--type", "mel",
+        "--format", "png",
+    ]
+    
+    print(f"[PROCESS] Running spectrogram generator: {' '.join(spec_cmd)}")
+    rc = subprocess.call(spec_cmd)
+    if rc != 0:
+        raise RuntimeError(f"Spectrogram generator failed with code {rc}")
+    
 
-def save_spectrogram(audio_file: Path, spect_folder: Path) -> Path:
-    """Generate mel-spectrogram from audio file and save as PNG identical to generator."""
-    y, sr = librosa.load(audio_file, sr=fs, mono=True)
-    spec_db = compute_spectrogram(y, sr)
-    base_filename = audio_file.stem
-    out_path = spect_folder / f"{base_filename}.png"
-    save_spectrogram_png(spec_db, out_path, grayscale=False, cmap="magma", image_scale=1.0)
-    return out_path
+    spec_file = spec_folder / f"{wav_path.stem}.png"
+    wait_time = 0
+    while not spec_file.exists() and wait_time < 3:
+        time.sleep(0.3)
+        wait_time += 0.3
 
-def toggle_recording(b):
-    global is_recording, recording
-    with output:
-        output.clear_output()
-        if not is_recording:
-            is_recording = True
-            button.description = "Stop Recording"
-            button.button_style = "danger"
-            print("Recording...")
-            threading.Thread(target=record_thread, daemon=True).start()
-        else:
-            is_recording = False
-            button.description = "Start Recording"
-            button.button_style = "success"
-            if not recording:
-                print("No audio recorded.")
-                return
+    if not spec_file.exists():
+        raise FileNotFoundError(f"Spectrogram was not found {wav_path}!")
 
-            audio_data = np.concatenate(recording, axis=0)
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = save_folder / f"recording_{timestamp}.wav"
-            write(filename, fs, np.int16(audio_data * 32767))
-            print(f"Recording finished! Audio saved as: {filename}")
+    img = Image.open(spec_file).convert("RGB")
 
-            spect_filename = save_spectrogram(filename, spect_folder)
-            print(f"Spectrogram saved as: {spect_filename}")
+    img = img.resize((128,128)) 
 
-button = widgets.Button(description="Start Recording", button_style="success")
-button.on_click(toggle_recording)
+    t = transforms.ToTensor()(img).unsqueeze(0).to(device)
+    
+    model.eval()
+    with torch.no_grad():
+        out = model(t)
+        pred = out.argmax(dim=1).item()
+        label = LABELS[pred]
+        prob = torch.softmax(out, dim=1)[0, pred].item()
 
+    return wav_path, spec_file, label, prob
+
+
+def on_toggle(b):
+    global is_recording, recording_buf
+    if not is_recording:
+        is_recording = True
+        b.description = 'Stop Recording'
+        b.button_style = 'danger'
+        threading.Thread(target=record_thread, daemon=True).start()
+       
+    else:
+        is_recording = False
+        b.description = 'Start Recording'
+        b.button_style = 'success'
+        with output:
+            output.clear_output()
+            print('Processing...')
+
+        if not recording_buf:
+            with output:
+                print('No audio recorded.')
+            return
+
+        audio = np.concatenate(recording_buf, axis=0).ravel()
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        fname = save_folder / f'recording_{timestamp}.wav'
+        write(str(fname), fs_record, np.int16(audio * 32767))
+
+        wav_path, spec_path, label, prob = process_and_predict(fname)
+
+        with output:
+            output.clear_output()
+            display(Markdown(f'**Saved WAV:** {wav_path}'))
+            display(Markdown(f'**Saved spectrogram PNG:** {spec_path}'))
+            display(Markdown(f'**Prediction:** {label} (p={prob:.3f})'))
+
+button = widgets.Button(description='Start Recording', button_style='success')
+output = widgets.Output()
+button.on_click(on_toggle)
 display(button, output)
