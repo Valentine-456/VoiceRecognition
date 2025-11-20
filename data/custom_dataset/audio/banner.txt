@@ -1,3 +1,0 @@
-PLACE AUDIO FILES HERE:
-THEN ADD TO matadata.csv FILE THE FOLLOWING DATA ABOUT THE FILE:
-file_name,label,place,gender,age,duration_s
