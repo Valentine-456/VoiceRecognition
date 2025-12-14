@@ -317,3 +317,5 @@ pyrightconfig.json
 .DS_Store
 Thumbs.db
 .vscode/
+
+data
