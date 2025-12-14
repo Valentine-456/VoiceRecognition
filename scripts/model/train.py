@@ -1,9 +1,11 @@
+import yaml
 from collections import Counter
 from pathlib import Path
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
+from src.training.choose_optimizer import choose_optimizer
 from src.training.transformations import train_transform, base_transform
 from src.voice_cnn import VoiceCNN
 
@@ -11,7 +13,6 @@ from src.voice_cnn import VoiceCNN
 DATA_ROOT = Path("data/processed") 
 BATCH_SIZE = 32
 EPOCHS = 10
-LR = 1e-3
 IMG_SIZE = 128
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -34,11 +35,20 @@ print("Train:", count_classes(train_data))
 print("Val:",   count_classes(val_data))
 print("Test:",  count_classes(test_data))
 
-model = VoiceCNN().to(DEVICE)
+# =========================
+# APPLYING MODIFICATIONS TO THE BASE MODEL
+# =========================
+
+CONFIG_PATH = Path("src/config/sgd_dropout-06.yaml")
+with CONFIG_PATH.open() as f:
+    cfg = yaml.safe_load(f)
+
+
+model = VoiceCNN(dropout_rate=cfg["model"]["dropout"]).to(DEVICE)
 print(model)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+optimizer = choose_optimizer(model, cfg)
 
 def run_epoch(model, loader, train: bool):
     model.train() if train else model.eval()
@@ -93,5 +103,10 @@ print(f"TEST accuracy: {test_acc * 100:.2f}%")
 # SAVE MODEL
 # =========================
 
-torch.save(model.state_dict(), "voice_cnn.pth")
-print("Model saved to voice_cnn.pth")
+OUTPUT_DIR = Path("outputs/models")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+model_path = OUTPUT_DIR / f"{CONFIG_PATH.stem}.pth"
+torch.save(model.state_dict(), model_path)
+print(f"💾 Model saved to {model_path}")
+
