@@ -37,4 +37,4 @@ def choose_optimizer(model, cfg):
         )
 
     else:
-        raise ValueError(f"Unknown optimizer type: {opt_cfg['type']}")
+        raise ValueError(f"Unknown optimizer type: {cfg['type']}")

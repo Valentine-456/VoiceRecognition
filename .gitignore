@@ -318,5 +318,5 @@ pyrightconfig.json
 Thumbs.db
 .vscode/
 
-data
-outputs
+/data
+/outputs
