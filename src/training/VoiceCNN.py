@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.training.ConvolutionBlock import ConvolutionBlock
+
 
 class VoiceCNN(nn.Module):
-    def __init__(self, dropout_rate: int = 0.3, in_channels: int = 3, num_classes: int = 2):
+    def __init__(self, dropout_rate: int = 0.3, in_channels: int = 3, num_classes: int = 2, batch_norm_mode: str = "none"):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv1 = ConvolutionBlock(in_channels, 16, batch_norm_mode)
+        self.conv2 = ConvolutionBlock(16, 32, batch_norm_mode)
+        self.conv3 = ConvolutionBlock(32, 64, batch_norm_mode)
         self.pool = nn.MaxPool2d(2, 2)
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(dropout_rate)
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool2d((4, 4)),
             nn.Flatten(),
@@ -21,8 +23,8 @@ class VoiceCNN(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = F.relu(self.conv3(x))
+        x = self.pool(self.conv1(x))
+        x = self.pool(self.conv2(x))
+        x = self.conv3(x)
         x = self.dropout(x)
         return self.head(x)

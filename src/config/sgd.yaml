@@ -6,4 +6,5 @@ training:
   learning_rate: 0.001
 
 model:
-  dropout: 0.3
+  dropout: 0.1
+  batch_norm_mode: before

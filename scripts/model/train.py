@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from src.training.choose_optimizer import choose_optimizer
 from src.training.transformations import train_transform, base_transform
-from src.training.voice_cnn import VoiceCNN
+from src.training.VoiceCNN import VoiceCNN
 
 DATA_ROOT = Path("data/processed") 
 BATCH_SIZE = 32
@@ -32,11 +32,13 @@ from pathlib import Path
 def create_model_name(config_path: Path, cfg: dict) -> str:
     lr = cfg["training"]["learning_rate"]
     dropout = cfg["model"]["dropout"]
+    batch_norm_mode = cfg["model"]["batch_norm_mode"]
 
     lr_str = f"{lr:.0e}" if lr < 1e-2 else f"{lr}".replace(".", "x")
     dropout_str = f"{dropout}".replace(".", "x")
+    batch_norm_str = f"{batch_norm_mode}{"activation" if batch_norm_mode != "none" else ""}"
 
-    return f"{config_path.stem}_lr_{lr_str}_dropout_{dropout_str}.pth"
+    return f"{config_path.stem}_lr_{lr_str}_dropout_{dropout_str}_batch_norm_{batch_norm_str}.pth"
 
 def main():
     args = parse_args()
@@ -63,7 +65,10 @@ def main():
     # APPLYING MODIFICATIONS TO THE BASE MODEL
     # =========================
 
-    model = VoiceCNN(dropout_rate=cfg["model"]["dropout"]).to(DEVICE)
+    model = VoiceCNN(
+        dropout_rate=cfg["model"]["dropout"], 
+        batch_norm_mode=cfg["model"]["batch_norm_mode"],
+    ).to(DEVICE)
     print(model)
 
     criterion = nn.CrossEntropyLoss()
