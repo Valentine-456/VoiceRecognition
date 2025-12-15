@@ -100,3 +100,59 @@ python scripts/preprocess_dataset.py \
   - `--split-recursive`: search subfolders for splitting
 
 See script READMEs under `scripts/` for running each step independently.
+
+---
+
+### Train a single model (one config)
+
+```bash
+python -m scripts.model.train adamw.yaml
+```
+
+This will:
+- load `src/config/adamw.yaml`
+- train a model with those settings
+- save the trained weights to:
+
+```
+outputs/models/adamw.pth
+```
+
+---
+
+### Train all models (batch experiments)
+
+To train **all configurations automatically**:
+
+```bash
+python -m scripts.model.trainAll
+```
+
+This script:
+- iterates over **all `.yaml` files** in `src/config/`
+- runs training for each config
+- saves each model separately
+- allows easy comparison of optimizers, dropout, batch norm, etc.
+
+Example output:
+
+```
+Found 5 configs:
+- adam.yaml
+- adamw.yaml
+- sgd.yaml
+- adagrad.yaml
+- rmsprop.yaml
+```
+
+Resulting models:
+
+```
+outputs/models/
+├── adamw_lr_2e-03_dropout_0x2_batch_norm_beforeactivation.pth
+├── rmsprop_lr_1e-03_dropout_0x1_batch_norm_beforeactivation.pth
+├── adagrad_lr_1e-03_dropout_0x1_batch_norm_none.pth
+├── etc....
+```
+
+---
