@@ -8,5 +8,5 @@ training:
 model:
   dropout: 0
   batch_norm_mode: before
-  activation: relu
+  activation: leaky_relu
   initialize_weights: auto
