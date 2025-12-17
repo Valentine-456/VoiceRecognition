@@ -15,5 +15,6 @@ model:
   dropout: 0.3
   batch_norm: after | before | none
   activation: relu | leaky_relu | sigmoid | tanh
+  initialize_weights: auto | he | xavier | uniform
 ```
 

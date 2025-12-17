@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from src.training.choose_optimizer import choose_optimizer
+from src.training.initialize_weights import initialize_weights
 from src.training.transformations import train_transform, base_transform
 from src.training.VoiceCNN import VoiceCNN
 
@@ -29,7 +30,7 @@ def count_classes(dataset):
 
 from pathlib import Path
 
-def create_model_name(config_path: Path, cfg: dict) -> str:
+def create_model_name(config_path: Path, cfg: dict, init_weights_strategy: str) -> str:
     lr = cfg["training"]["learning_rate"]
     dropout = cfg["model"]["dropout"]
     batch_norm_mode = cfg["model"]["batch_norm_mode"]
@@ -39,7 +40,7 @@ def create_model_name(config_path: Path, cfg: dict) -> str:
     dropout_str = f"{dropout}".replace(".", "x")
     batch_norm_str = f"{batch_norm_mode}{"activation" if batch_norm_mode != "none" else ""}"
 
-    return f"{config_path.stem}_lr_{lr_str}_dropout_{dropout_str}_batch_norm_{batch_norm_str}_{activation}.pth"
+    return f"{config_path.stem}_lr_{lr_str}_dropout_{dropout_str}_batchnorm_{batch_norm_str}_{activation}_{init_weights_strategy}_weights.pth"
 
 def main():
     args = parse_args()
@@ -71,7 +72,13 @@ def main():
         batch_norm_mode=cfg["model"]["batch_norm_mode"],
         activation=cfg["model"]["activation"]
     ).to(DEVICE)
+    init_weights_strategy = initialize_weights(
+        model, 
+        cfg["model"]["activation"],
+        init_type=cfg["model"]["initialize_weights"]
+    )
     print(model)
+    print(f"Weights were initializeed using {init_weights_strategy} strategy...")
 
     criterion = nn.CrossEntropyLoss()
     optimizer = choose_optimizer(model, cfg)
@@ -132,7 +139,7 @@ def main():
     OUTPUT_DIR = Path("outputs/models")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    model_path = OUTPUT_DIR / create_model_name(config_path, cfg)
+    model_path = OUTPUT_DIR / create_model_name(config_path, cfg, init_weights_strategy)
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
 

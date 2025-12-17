@@ -9,3 +9,4 @@ model:
   dropout: 0.1
   batch_norm_mode: before
   activation: relu
+  initialize_weights: auto
