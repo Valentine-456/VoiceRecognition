@@ -7,3 +7,4 @@ training:
 model:
   dropout: 0.2
   batch_norm_mode: before
+  activation: relu
