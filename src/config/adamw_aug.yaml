@@ -1,12 +1,11 @@
 optimizer:
-  type: sgd
-  momentum: 0.9
+  type: adamw
 
 training:
   learning_rate: 0.001
 
 model:
-  dropout: 0.3
+  dropout: 0.1
   batch_norm_mode: before
-  activation: leaky_relu
+  activation: relu
   initialize_weights: auto
