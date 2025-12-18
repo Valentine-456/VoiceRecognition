@@ -1,5 +1,5 @@
 optimizer:
-  type: adam
+  type: adagrad
 
 training:
   learning_rate: 0.001
@@ -7,5 +7,5 @@ training:
 model:
   dropout: 0.1
   batch_norm_mode: before
-  activation: leaky_relu
+  activation: relu
   initialize_weights: auto

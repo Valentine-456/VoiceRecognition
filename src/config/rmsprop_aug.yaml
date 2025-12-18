@@ -1,12 +1,12 @@
 optimizer:
-  type: sgd
+  type: rmsprop
   momentum: 0.9
 
 training:
   learning_rate: 0.001
 
 model:
-  dropout: 0.1
+  dropout: 0
   batch_norm_mode: before
-  activation: leaky_relu
+  activation: relu
   initialize_weights: auto

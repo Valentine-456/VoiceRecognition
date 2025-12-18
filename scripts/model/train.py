@@ -29,7 +29,7 @@ def log_experiment(row: dict):
         writer.writerow(row)
 
 
-DATA_ROOT = Path("data/processed") 
+DATA_ROOT = Path("data/processed_aug") 
 BATCH_SIZE = 32
 EPOCHS = 10
 IMG_SIZE = 128
